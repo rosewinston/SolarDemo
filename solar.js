@@ -11,14 +11,18 @@ const siteInfo="&Query=SolarInfo(%SITE%)"
 const allSitesDayWatts="&Query=SolarHistorySummary(*,qHistoryWattsHour1,%DATE%*)";
 const SolarWattsAverageDay="&Query=SolarWattsAverageDay(8B0C4C,%DATE%"
 const SolarWattsAllDayAllSites="&Query=SolarWattsAllDayAllSites(%DATE%*)";
+const SolarWattsHourlyAllSites="&Query=SolarHistorySummary(*,qHistoryWattsDay1,%DATE%*)";
 // &Query=SolarHistory(8B0AB1,qWattsmin1,2023-02-02*)
 // &Query=SolarHistory(SITE,qWattsmin1,DATE*)
 console.log("Start!");
 const ErrSrv = '<p style="color:red">Error reading from server';
 const QueryErr = '<p style="color:red">ErQuery failed';
+var colors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#ffffff'];
 var siteMap = {};  // A global place to store MAC to School name map
 var summaryChart = 0;
 var summaryWhrChart = 0;
+var hourlySumChart = 0;
+var todayLineGraph = 0;
 
 
 // Add an event listener for each item in the pull down menu
@@ -59,7 +63,6 @@ function todaysDate() {
 	var yyyy = today.getFullYear();
 	var date = yyyy +'-'+ mm +'-'+ dd;
 	return date;
-	
 }
 
 // Get time from date
@@ -194,21 +197,28 @@ function sumArray(a) {
 function displayAllSiteTodayWatts(data){
 	var names = [];
 	var whrs = [];
+	let counter = 0;
+	var jsons = [];
 	//console.log(JSON.stringify(siteMap));
 	data.forEach(function(site) {
 		var MAC = site.shift();
 		var wattsList = site;
+		//console.log(wattsList);
+		var name = siteMap[MAC];
 		var whr = sumArray(wattsList);
-		
 		if (whr > 0) {
 			//console.log(MAC,siteMap[MAC],whr);
+			var json = makeLineGraphJson(name,wattsList,counter);
+			jsons.push(json);
+			counter += 1;
 			names.push(siteMap[MAC]);
 			whrs.push(whr);
-		}
-		
+		}	
 	});
-	console.log(JSON.stringify(names),JSON.stringify(whrs));
+	//console.log(JSON.stringify(names),JSON.stringify(whrs));
+	//console.log(JSON.stringify(jsons));
 	makeSumSummaryGraph(names,whrs);
+	makeTodayLineGraph(jsons);
 }
 
 // Process All Site watts by hour for that day
@@ -223,13 +233,14 @@ function processAllSiteTodayWatts(results) {
 	//console.log(JSON.stringify(data));
 	document.querySelector('#output2').innerHTML += "<h1>Total Kilowatts today</h1>";
 	displayAllSiteTodayWatts(data);
+	getAllSiteHourlyTodayWatts();
 }
 
 // Get All Site watts by hour for that day
 function getAllSiteTodayWatts() {
 	var command=Url+SolarWattsAllDayAllSites;
 	command=command.replace("%DATE%",todaysDate());
-	console.log(command);
+	//console.log(command);
 	fetch(command, {
 		method: 'get'
     	})
@@ -284,7 +295,6 @@ function processSiteInfo(results) {
 	document.querySelector('#output').innerHTML = output;
 	destroySummaryChart();
 	getSiteDailyWatts(siteMAC);
-	
 }
 
 // Get the Site info given the site MAC address
@@ -371,4 +381,153 @@ function makeSumSummaryGraph(names,watts) {
     }
   });
 }
+// ---------Rose added these (and also made all the code earlier to get the Line Graph working-------
 
+// creates the json file for each school line graph
+function makeLineGraphJson(name,wattsList,counter) {
+	let json = {label: name,data:wattsList,borderColor:colors[counter]}
+	//console.log(JSON.stringify(json));
+	return json;
+}
+
+// creates the line graph for all schools and their data
+function makeTodayLineGraph(jsons) {
+	document.querySelector('#output4').innerHTML += "<h1>Live Hourly Kilowatts Per School</h1>";
+	const ctx = document.getElementById('chart4');
+	todayLineGraph = new Chart(ctx, {
+	  type: 'line',
+	  data: {
+		labels: ["6am", "7am", "8am", "9am", "10am", "11am", "12pm", "1pm", "2pm", "3pm", "4pm", "5pm", "6pm"],
+		datasets: jsons
+	  },
+	  options: {
+		//indexAxis: 'y',
+		scales: {
+		  y: {
+			beginAtZero: true
+		  }
+		}
+	  }
+	});
+  }
+
+// ----Tam added these-----
+// function sumVector(a, b) {
+// 	return a.map((e,i) => e + b[i]);
+// }
+
+function sumVector(array1, array2) {
+	var result = [];
+  	var ctr = 0;
+  	var x=0;
+
+ 	while (ctr < array1.length && ctr < array2.length) {
+    	result.push(array1[ctr] + array2[ctr]);
+    	ctr++;
+	}
+
+ 	if (ctr === array1.length) {
+    	for (x = ctr; x < array2.length; x++) {
+      		result.push(array2[x]);
+    	}
+  	} 
+
+  	else {
+  		for (x = ctr; x < array1.length; x++) {
+      		result.push(array1[x]);
+    	}
+  	}
+  	return result;
+}
+
+function makeHourlySummaryGraph(watts) {
+	const ctx = document.getElementById('chart3');
+	
+	// if (summaryWhrChart) destroyWhrChart();
+	  
+	summaryWhrChart = new Chart(ctx, {
+	  type: 'bar',
+	  data: {
+		labels: ["6am", "7am", "8am", "9am", "10am", "11am", "12pm", "1pm", "2pm", "3pm", "4pm", "5pm", "6pm"],
+		datasets: [{
+		  label: 'Kilowatt hours',
+		  data: watts,
+		  borderWidth: 1
+		}]
+	  },
+	  options: {
+		//indexAxis: 'y',
+		scales: {
+		  y: {
+			beginAtZero: true
+		  }
+		}
+	  }
+	});
+  }
+
+// Build data for a graph of total watts for today
+function displayAllSiteHourlyTodayWatts(data){
+	var names = [];
+	var whrs = [];
+	//console.log(JSON.stringify(siteMap));
+	data.forEach(function(site) {
+		var MAC = site.shift();
+		var wattsList = site;
+		//console.log(wattsList[2]);
+
+		//-- new --
+		let arr = sumVector(whrs, wattsList[2]);
+		whrs = [...arr];
+		
+		// if (whr > 0) {
+		// console.log("RESULT----")
+		//console.log(whrs);
+		// 	names.push(siteMap[MAC]);
+		// 	whrs.push(whr);
+		// }
+		
+	});
+	// console.log(JSON.stringify(names),JSON.stringify(whrs));
+	makeHourlySummaryGraph(whrs);
+}
+
+// Process All Site watts by hour for that day
+function processAllSiteHourlyTodayWatts(results) {
+	if (!results["success"]) {
+		document.querySelector('#output3').innerHTML = QueryErr+"Get all sites hourly watts for yesterday";
+		return;
+	}
+	//clearCanvas();
+	var data = results['message'];
+	
+	//console.log(JSON.stringify(data));
+	document.querySelector('#output3').innerHTML += "<h1>Total Hourly Kilowatts Yesterday</h1>";
+	displayAllSiteHourlyTodayWatts(data);
+}
+
+// Get All Site watts by hour for that day
+function getAllSiteHourlyTodayWatts() {
+	var command=Url+SolarWattsHourlyAllSites;
+	command=command.replace("%DATE%",yesterdaysDate());
+	// console.log(command);
+	fetch(command, {
+		method: 'get'
+    	})
+		.then (response => response.json() )
+        	.then (data => processAllSiteHourlyTodayWatts(data))
+		.catch(error => {
+	    	document.querySelector('#output3').innerHTML = ErrSrv+" Get all sites watts for today";
+		})
+}
+
+// Get yesterday's date
+function yesterdaysDate() {
+	var today = new Date();
+	today.setDate(today.getDate()-1);
+	var dd = String(today.getDate()).padStart(2, '0');
+	var mm = String(today.getMonth() + 1).padStart(2, '0'); //January is 0!
+	var yyyy = today.getFullYear();
+	var date = yyyy +'-'+ mm +'-'+ dd;
+	return date;
+}
